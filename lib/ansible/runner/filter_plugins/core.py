@@ -219,6 +219,88 @@ def version_compare(value, version, operator='eq', strict=False):
     except Exception, e:
         raise errors.AnsibleFilterError('Version comparison: %s' % e)
 
+def dq_network_address(value):
+    components = value.split('/')
+
+    if len(components) == 1:
+        return 'Invalid format.'
+
+    if components[0] == '':
+        return 'Address missing.'
+
+    if components[1] == '':
+        return 'Mask bits missing.'
+
+    octets = components[0].split('.')
+
+    numOctets = len(octets)
+    while numOctets < 4:
+        components[0] = components[0] + '.0'
+        numOctets = numOctets + 1
+
+    return components[0]
+
+def dq_network_mask(value):
+    components = value.split('/')
+
+    if len(components) == 1:
+        return 'Invalid format.'
+
+    if components[0] == '':
+        return 'Address missing.'
+
+    if components[1] == '':
+        return 'Mask bits missing.'
+
+    bits = components[1]
+
+    numOctets = int(bits) // 8
+    rest = int(bits) % 8
+
+    mask = ''
+    i = 0;
+    while i < numOctets:
+        mask = mask + '255'
+        i = i + 1
+        if (i < numOctets):
+            mask = mask + '.'
+
+    exp = 128
+    i = 0
+    octet = 0
+    while i < rest:
+        octet = octet + exp
+        exp = exp / 2
+        i = i + 1
+
+    if numOctets != 0:
+        octetString = '.' + str(octet)
+    else:
+        octetString = str(octet)
+
+    mask = mask + octetString
+    numOctets = numOctets + 1
+
+    while numOctets < 4:
+        mask = mask + '.0'
+        numOctets = numOctets + 1
+
+    return mask
+
+def dq_network_bits(value):
+    components = value.split('/')
+
+    if len(components) == 1:
+        return 'Invalid format.'
+
+    if components[0] == '':
+        return 'Address missing.'
+
+    if components[1] == '':
+        return 'Mask bits missing.'
+
+    return components[1]
+
 @environmentfilter
 def rand(environment, end, start=None, step=None):
     r = SystemRandom()
@@ -307,4 +389,9 @@ class FilterModule(object):
 
             # random numbers
             'random': rand,
+
+            # network address manipulation
+           'dq_network_address': dq_network_address,
+           'dq_network_mask': dq_network_mask,
+           'dq_network_bits': dq_network_bits,
         }
