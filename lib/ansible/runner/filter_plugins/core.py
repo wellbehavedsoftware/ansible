@@ -243,6 +243,23 @@ def randomize_list(mylist):
         pass
     return mylist
 
+def join3(value, prefix='', sufix='', separator=' '):
+
+    output_separator = sufix + separator + prefix
+    content = output_separator.join(value)
+
+    prefix_list = []
+    prefix_list.append(prefix)
+    prefix_list.append(content)
+    content_with_prefix = ''.join(prefix_list)
+
+    sufix_list = []
+    sufix_list.append(content_with_prefix)
+    sufix_list.append(sufix)
+    content_with_both = ''.join(sufix_list)
+
+    return content_with_both
+
 class FilterModule(object):
     ''' Ansible core jinja2 filters '''
 
@@ -320,4 +337,7 @@ class FilterModule(object):
             # random stuff
             'random': rand,
             'shuffle': randomize_list,
+
+            #join3
+            'join3': join3,
         }
