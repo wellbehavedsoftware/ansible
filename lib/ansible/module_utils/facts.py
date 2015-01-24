@@ -46,7 +46,7 @@ except ImportError:
     import simplejson as json
 
 # --------------------------------------------------------------
-# timeout function to make sure some fact gathering 
+# timeout function to make sure some fact gathering
 # steps do not exceed a time limit
 
 class TimeoutError(Exception):
@@ -82,7 +82,8 @@ class Facts(object):
     subclass Facts.
     """
 
-    _I386RE = re.compile(r'i[3456]86')
+    # i86pc is a Solaris and derivatives-ism
+    _I386RE = re.compile(r'i([3456]86|86pc)')
     # For the most part, we assume that platform.dist() will tell the truth.
     # This is the fallback to handle unknowns or exceptions
     OSDIST_LIST = ( ('/etc/redhat-release', 'RedHat'),
@@ -320,6 +321,32 @@ class Facts(object):
                                 self.facts['distribution_version'] = data.split()[1]
                                 self.facts['distribution_release'] = ora_prefix + data
                                 break
+
+                            uname_rc, uname_out, uname_err = module.run_command(['uname', '-v'])
+                            distribution_version = None
+                            if 'SmartOS' in data:
+                                self.facts['distribution'] = 'SmartOS'
+                                if os.path.exists('/etc/product'):
+                                    product_data = dict([l.split(': ', 1) for l in get_file_content('/etc/product').split('\n') if ': ' in l])
+                                    if 'Image' in product_data:
+                                        distribution_version = product_data.get('Image').split()[-1]
+                            elif 'OpenIndiana' in data:
+                                self.facts['distribution'] = 'OpenIndiana'
+                            elif 'OmniOS' in data:
+                                self.facts['distribution'] = 'OmniOS'
+                                distribution_version = data.split()[-1]
+                            elif uname_rc == 0 and 'NexentaOS_' in uname_out:
+                                self.facts['distribution'] = 'Nexenta'
+                                distribution_version = data.split()[-1].lstrip('v')
+
+                            if self.facts['distribution'] in ('SmartOS', 'OpenIndiana', 'OmniOS', 'Nexenta'):
+                                self.facts['distribution_release'] = data.strip()
+                                if distribution_version is not None:
+                                    self.facts['distribution_version'] = distribution_version
+                                elif uname_rc == 0:
+                                    self.facts['distribution_version'] = uname_out.split('\n')[0].strip()
+                                break
+
                         elif name == 'SuSE':
                             data = get_file_content(path)
                             if 'suse' in data.lower():
@@ -603,22 +630,49 @@ class LinuxHardware(Hardware):
 
     def get_cpu_facts(self):
         i = 0
+        vendor_id_occurrence = 0
+        model_name_occurrence = 0
         physid = 0
         coreid = 0
         sockets = {}
         cores = {}
+
+        xen = False
+        xen_paravirt = False
+        try:
+            if os.path.exists('/proc/xen'):
+                xen = True
+            elif open('/sys/hypervisor/type').readline().strip() == 'xen':
+                xen = True
+        except IOError:
+            pass
+
         if not os.access("/proc/cpuinfo", os.R_OK):
             return
         self.facts['processor'] = []
         for line in open("/proc/cpuinfo").readlines():
             data = line.split(":", 1)
             key = data[0].strip()
+
+            if xen:
+                if key == 'flags':
+                    # Check for vme cpu flag, Xen paravirt does not expose this.
+                    #   Need to detect Xen paravirt because it exposes cpuinfo
+                    #   differently than Xen HVM or KVM and causes reporting of
+                    #   only a single cpu core.
+                    if 'vme' not in data:
+                        xen_paravirt = True
+
             # model name is for Intel arch, Processor (mind the uppercase P)
             # works for some ARM devices, like the Sheevaplug.
             if key == 'model name' or key == 'Processor' or key == 'vendor_id':
                 if 'processor' not in self.facts:
                     self.facts['processor'] = []
                 self.facts['processor'].append(data[1].strip())
+                if key == 'vendor_id':
+                    vendor_id_occurrence += 1
+                if key == 'model name':
+                    model_name_occurrence += 1
                 i += 1
             elif key == 'physical id':
                 physid = data[1].strip()
@@ -634,13 +688,23 @@ class LinuxHardware(Hardware):
                 cores[coreid] = int(data[1].strip())
             elif key == '# processors':
                 self.facts['processor_cores'] = int(data[1].strip())
+
+        if vendor_id_occurrence == model_name_occurrence:
+            i = vendor_id_occurrence
+
         if self.facts['architecture'] != 's390x':
-            self.facts['processor_count'] = sockets and len(sockets) or i
-            self.facts['processor_cores'] = sockets.values() and sockets.values()[0] or 1
-            self.facts['processor_threads_per_core'] = ((cores.values() and
-                cores.values()[0] or 1) / self.facts['processor_cores'])
-            self.facts['processor_vcpus'] = (self.facts['processor_threads_per_core'] *
-                self.facts['processor_count'] * self.facts['processor_cores'])
+            if xen_paravirt:
+                self.facts['processor_count'] = i
+                self.facts['processor_cores'] = i
+                self.facts['processor_threads_per_core'] = 1
+                self.facts['processor_vcpus'] = i
+            else:
+                self.facts['processor_count'] = sockets and len(sockets) or i
+                self.facts['processor_cores'] = sockets.values() and sockets.values()[0] or 1
+                self.facts['processor_threads_per_core'] = ((cores.values() and
+                    cores.values()[0] or 1) / self.facts['processor_cores'])
+                self.facts['processor_vcpus'] = (self.facts['processor_threads_per_core'] *
+                    self.facts['processor_count'] * self.facts['processor_cores'])
 
     def get_dmi_facts(self):
         ''' learn dmi facts from system
@@ -731,6 +795,13 @@ class LinuxHardware(Hardware):
                         size_available = statvfs_result.f_bsize * (statvfs_result.f_bavail)
                     except OSError, e:
                         continue
+                    lsblkPath = module.get_bin_path("lsblk")
+                    rc, out, err = module.run_command("%s -ln --output UUID %s" % (lsblkPath, fields[0]), use_unsafe_shell=True)
+
+                    if rc == 0:
+                        uuid = out.strip()
+                    else:
+                        uuid = 'NA'
 
                     self.facts['mounts'].append(
                         {'mount': fields[1],
@@ -740,6 +811,7 @@ class LinuxHardware(Hardware):
                          # statvfs data
                          'size_total': size_total,
                          'size_available': size_available,
+                         'uuid': uuid,
                          })
 
     def get_device_facts(self):

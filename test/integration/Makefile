@@ -37,6 +37,9 @@ unicode:
 	# Test the start-at-task flag #9571
 	ansible-playbook unicode.yml -i $(INVENTORY) -e @$(VARS_FILE) -v --start-at-task '*¶' -e 'start_at_task=True' $(TEST_FLAGS)
 
+mine:
+	ansible-playbook mine.yml -i $(INVENTORY) -e @$(VARS_FILE) $(CREDENTIALS_ARG) -v $(TEST_FLAGS)
+
 non_destructive:
 	ansible-playbook non_destructive.yml -i $(INVENTORY) -e @$(VARS_FILE) $(CREDENTIALS_ARG) -v $(TEST_FLAGS)
 
@@ -91,8 +94,7 @@ gce_cleanup:
 	python cleanup_gce.py -y --match="^$(CLOUD_RESOURCE_PREFIX)"
 
 rackspace_cleanup:
-	@echo "FIXME - cleanup_rax.py not yet implemented"
-	@# python cleanup_rax.py -y --match="^$(CLOUD_RESOURCE_PREFIX)"
+	python cleanup_rax.py -y --match="^$(CLOUD_RESOURCE_PREFIX)"
 
 $(CREDENTIALS_FILE):
 	@echo "No credentials file found.  A file named '$(CREDENTIALS_FILE)' is needed to provide credentials needed to run cloud tests.  See sample 'credentials.template' file."

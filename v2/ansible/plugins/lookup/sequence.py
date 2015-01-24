@@ -15,9 +15,12 @@
 # You should have received a copy of the GNU General Public License
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 
-from ansible.errors import AnsibleError
-import ansible.utils as utils
 from re import compile as re_compile, IGNORECASE
+
+from ansible.errors import *
+from ansible.parsing.splitter import parse_kv
+from ansible.plugins.lookup import LookupBase
+from ansible.template import Templar
 
 # shortcut format
 NUM = "(0?x?[0-9a-f]+)"
@@ -34,7 +37,7 @@ SHORTCUT = re_compile(
 )
 
 
-class LookupModule(object):
+class LookupModule(LookupBase):
     """
     sequence lookup module
 
@@ -72,10 +75,6 @@ class LookupModule(object):
     The count option is mostly useful for avoiding off-by-one errors and errors
     calculating the number of entries in a sequence when a stride is specified.
     """
-
-    def __init__(self, basedir, **kwargs):
-        """absorb any keyword args"""
-        self.basedir = basedir
 
     def reset(self):
         """set sensible defaults"""
@@ -170,26 +169,24 @@ class LookupModule(object):
                     "problem formatting %r with %r" % self.format
                 )
 
-    def run(self, terms, inject=None, **kwargs):
+    def run(self, terms, variables, **kwargs):
         results = []
-
-        terms = utils.listify_lookup_plugin_terms(terms, self.basedir, inject)
 
         if isinstance(terms, basestring):
             terms = [ terms ]
+
+        templar = Templar(loader=self._loader, variables=variables)
 
         for term in terms:
             try:
                 self.reset()  # clear out things for this iteration
 
+                term = templar.template(term)
                 try:
                     if not self.parse_simple_args(term):
-                        self.parse_kv_args(utils.parse_kv(term))
-                except Exception:
-                    raise AnsibleError(
-                        "unknown error parsing with_sequence arguments: %r"
-                        % term
-                    )
+                        self.parse_kv_args(parse_kv(term))
+                except Exception, e:
+                    raise AnsibleError("unknown error parsing with_sequence arguments: %r. Error was: %s" % (term, e))
 
                 self.sanity_check()
 

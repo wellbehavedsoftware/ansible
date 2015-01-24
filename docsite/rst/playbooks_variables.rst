@@ -311,6 +311,74 @@ To get a random list from an existing  list::
 
 note that when used with a non 'listable' item it is a noop, otherwise it always returns a list
 
+
+.. _math_stuff:
+
+Math
+--------------------
+.. versionadded:: 1.9
+
+
+To see if something is actually a number::
+
+    {{ myvar | isnan }}
+
+Get the logarithm (default is e)::
+
+    {{ myvar | log }}
+
+Get the base 10 logarithm::
+
+    {{ myvar | log(10) }}
+
+Give me the power of 2! (or 5)::
+
+    {{ myvar | pow(2) }}
+    {{ myvar | pow(5) }}
+
+Square root, or the 5th::
+
+    {{ myvar | root }}
+    {{ myvar | root(5) }}
+
+Note that jinja2 already provides some like abs() and round().
+
+
+.. _hash_filters:
+
+Hashing filters
+--------------------
+.. versionadded:: 1.9
+
+To get the sha1 hash of a string::
+
+    {{ 'test1'|hash('sha1') }}
+
+To get the md5 hash of a string::
+
+    {{ 'test1'|hash('md5') }}
+
+Get a string checksum::
+
+    {{ 'test2'|checksum }}
+
+Other hashes (platform dependant)::
+
+    {{ 'test2'|hash('blowfish') }}
+
+To get a sha512 password hash (random salt)::
+
+    {{ 'passwordsaresecret'|password_hash('sha512') }}
+
+To get a sha256 password hash with a specific salt::
+
+    {{ 'secretpassword'|password_hash('sha256', 'mysecretsalt') }}
+
+
+Hash types available depend on the master system running ansible,
+'hash' depends on hashlib password_hash depends on crypt.
+
+
 .. _other_useful_filters:
 
 Other Useful Filters
@@ -341,9 +409,9 @@ To work with Base64 encoded strings::
     {{ encoded | b64decode }}
     {{ decoded | b64encode }}
 
-To take a sha1sum of a filename::
+To create a UUID from a string (new in version 1.9)::
 
-    {{ filename | sha1 }}
+    {{ hostname | to_uuid }}
 
 To cast values as certain types, such as when you input a string as "True" from a vars_prompt and the system
 doesn't know it is a boolean value::
@@ -758,11 +826,14 @@ the fact that they have not been communicated with in the current execution of /
 To configure fact caching, enable it in ansible.cfg as follows::
 
     [defaults]
+    gathering = smart
     fact_caching = redis
     fact_caching_timeout = 86400
     # seconds
 
-At the time of writing, Redis is the only supported fact caching engine.  
+You might also want to change the 'gathering' setting to 'smart' or 'explicit' or set gather_facts to False in most plays.
+
+At the time of writing, Redis is the only supported fact caching engine.
 To get redis up and running, perform the equivalent OS commands::
 
     yum install redis
@@ -911,7 +982,7 @@ The contents of each variables file is a simple YAML dictionary, like this::
 
 .. note::
    It's also possible to keep per-host and per-group variables in very
-   similar files, this is covered in :doc:`intro_patterns`.
+   similar files, this is covered in :ref:`splitting_out_vars`.
 
 .. _passing_variables_on_the_command_line:
 

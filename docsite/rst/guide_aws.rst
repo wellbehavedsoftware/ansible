@@ -104,6 +104,7 @@ From this, we'll use the add_host module to dynamically create a host group cons
                 Name: Demo
              instance_tags:
                 Name: Demo
+          register: ec2
     
        - name: Add all instance public IPs to host group
          add_host: hostname={{ item.public_ip }} groupname=ec2hosts
@@ -223,7 +224,7 @@ Generally speaking, we find most users using Packer.
 
 If you do not want to adopt Packer at this time, configuring a base-image with Ansible after provisioning (as shown above) is acceptable.
 
-.. aws_next_steps::
+.. _aws_next_steps:
 
 Next Steps: Explore Modules
 ```````````````````````````

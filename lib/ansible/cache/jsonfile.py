@@ -17,13 +17,16 @@
 
 import os
 import time
-import json
 import errno
+
+try:
+    import simplejson as json
+except ImportError:
+    import json
 
 from ansible import constants as C
 from ansible import utils
 from ansible.cache.base import BaseCacheModule
-
 
 class CacheModule(BaseCacheModule):
     """
@@ -34,6 +37,8 @@ class CacheModule(BaseCacheModule):
         self._timeout = float(C.CACHE_PLUGIN_TIMEOUT)
         self._cache = {}
         self._cache_dir = C.CACHE_PLUGIN_CONNECTION # expects a dir path
+        if not self._cache_dir:
+            utils.exit("error, fact_caching_connection is not set, cannot use fact cache")
 
         if not os.path.exists(self._cache_dir):
             try:
@@ -68,12 +73,11 @@ class CacheModule(BaseCacheModule):
 
         cachefile = "%s/%s" % (self._cache_dir, key)
         try:
-            #TODO: check if valid keys can have invalid FS chars, base32?
             f = open(cachefile, 'w')
         except (OSError,IOError), e:
             utils.warning("error while trying to read %s : %s" % (cachefile, str(e)))
         else:
-            json.dump(value, f, ensure_ascii=False)
+            f.write(utils.jsonify(value))
         finally:
             f.close()
 
